@@ -33,3 +33,9 @@ DBus to communicate with the host, introducing 2 big dependencies.
 
 This is not a replacement for `host-spawn`, but a different approach to the same
 problem on those systems where Flatpak or DBus are not available.
+
+## What is left to do?
+
+- [ ] Add an option to restrict the commands that can be run
+- [ ] Add support for creating shims for host binaries
+- [ ] Code optimization
