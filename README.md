@@ -1,6 +1,6 @@
 # hrun
 
-Run commands on your host machine from inside your [distrobox]](https://github.com/89luca89/distrobox)
+Run commands on your host machine from inside your [distrobox](https://github.com/89luca89/distrobox)
 or [toolbx](https://github.com/containers/toolbox) container.
 
 Highly inspired by [host-spawn](https://github.com/1player/host-spawn).
