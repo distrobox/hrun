@@ -72,7 +72,6 @@ func startServer() {
 		ptyMaster, ptySlave, err = pty.Open()
 		if err != nil {
 			fmt.Println("Error creating PTY:", err)
-			sendErrorResponse(conn, fmt.Errorf("error creating PTY"))
 			conn.Close()
 			return
 		}
@@ -107,7 +106,6 @@ func startServer() {
 		// start the shell process
 		if err = cmd.Start(); err != nil {
 			fmt.Println("Error starting shell:", err)
-			sendErrorResponse(conn, fmt.Errorf("error starting shell"))
 			conn.Close()
 			return
 		}
@@ -127,7 +125,6 @@ func startServer() {
 		go func() {
 			<-sigCh
 			fmt.Println("Closing the connection and shell process...")
-			sendSuccessResponse(conn)
 			conn.Close()
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}()
@@ -178,26 +175,4 @@ func startClient(command string) {
 	}()
 
 	<-doneCh
-}
-
-// FIXME: following methods are not really used, server sends response to the
-// client but client does not read it yet
-func sendSuccessResponse(conn net.Conn) {
-	response := "OK"
-	_, err := conn.Write([]byte(response))
-	if err != nil {
-		fmt.Printf("Error sending success response: %v\n", err)
-	}
-
-	fmt.Printf("Sent response to the container: %s\n", response)
-}
-
-func sendErrorResponse(conn net.Conn, err error) {
-	response := fmt.Sprintf("Error: %v", err)
-	_, writeErr := conn.Write([]byte(response))
-	if writeErr != nil {
-		fmt.Printf("Error sending error response: %v\n", writeErr)
-	}
-
-	fmt.Printf("Sent response to the container: %s\n", response)
 }
