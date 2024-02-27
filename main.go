@@ -98,9 +98,10 @@ func startServer() {
 
 		// set the process group so that the termination signal is
 		// forwarded to the shell process
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr.Setctty = true
+		cmd.SysProcAttr.Setsid = true
+		cmd.SysProcAttr.Pdeathsig = syscall.SIGTERM
 
 		// start the shell process
 		if err = cmd.Start(); err != nil {
