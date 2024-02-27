@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/creack/pty"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -152,9 +153,15 @@ func startClient(command string) {
 		return
 	}
 
+	// set the terminal to raw mode
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
+
 	// create a channel to communicate with the pty
 	doneCh := make(chan struct{})
-
 	go func() {
 		_, err := io.Copy(conn, os.Stdin)
 		if err != nil {
