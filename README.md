@@ -24,3 +24,12 @@ Then you can run commands from inside your container:
 ```bash
 hrun echo "Hello from your host machine"
 ```
+
+## What's the point?
+
+The main difference between `hrun` and `host-spawn` is that `hrun` relies on a
+socket server running on the host machine, while `host-spawn` uses the Flatpak
+DBus to communicate with the host, introducing 2 big dependencies.
+
+This is not a replacement for `host-spawn`, but a different approach to the same
+problem on those systems where Flatpak or DBus are not available.
