@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,12 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/term"
 )
+
+type Command struct {
+	Command []string
+	Width   uint16
+	Height  uint16
+}
 
 func main() {
 	// Start the server if the first argument is "start"
@@ -34,10 +41,9 @@ shell on the host.`)
 		return
 	}
 
-	// Start the client otherwise
-	command := "sh -c $SHELL"
+	command := []string{"sh", "-c", os.Getenv("SHELL")}
 	if len(os.Args) > 1 {
-		command = strings.Join(os.Args[1:], " ")
+		command = os.Args[1:]
 	}
 
 	startClient(command)
@@ -96,17 +102,23 @@ func acceptConn(listener net.Listener) <-chan net.Conn {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	// Read the command from the client and split it into parts
+	// Read the command from the client
 	reader := bufio.NewReader(conn)
-	command, err := reader.ReadString('\n')
+	rawCommand, err := reader.ReadString('\n')
 	if err != nil {
 		log.Println("Failed to read command: ", err)
 		return
 	}
-	log.Printf("Received command: %s", command)
-	command = strings.TrimSpace(command)
-	cmdParts := strings.Fields(command)
-	if len(cmdParts) == 0 {
+	log.Printf("Received command: %s", rawCommand)
+
+	// Decode the command into the Command struct
+	var cmdStruct Command
+	if err := json.Unmarshal([]byte(rawCommand), &cmdStruct); err != nil {
+		log.Printf("Error decoding command: %v", err)
+		conn.Close()
+		return
+	}
+	if len(cmdStruct.Command) == 0 {
 		log.Println("No command provided")
 		return
 	}
@@ -119,7 +131,19 @@ func handleConnection(conn net.Conn) {
 		conn.Close()
 		return
 	}
+	defer ptySlave.Close()
 	log.Println("PTY created")
+
+	// Set initial terminal size
+	ws := &pty.Winsize{
+		Cols: cmdStruct.Width,
+		Rows: cmdStruct.Height,
+	}
+	if err := pty.Setsize(ptyMaster, ws); err != nil {
+		log.Printf("Error setting initial terminal size: %v", err)
+	} else {
+		log.Printf("Terminal initialized to %dx%d", cmdStruct.Width, cmdStruct.Height)
+	}
 
 	// Set up the channels to communicate with the host
 	go func() {
@@ -133,14 +157,13 @@ func handleConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
-	// Set the terminal size
+	// Set the terminal size on resize request
 	go func() {
-		reader := bufio.NewReader(conn)
 		for {
 			message, err := reader.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
-					log.Printf("Error reading from connection: %v\n", err)
+					log.Printf("Error reading from connection: %v", err)
 				}
 				break
 			}
@@ -153,7 +176,7 @@ func handleConnection(conn net.Conn) {
 					width, errWidth := strconv.Atoi(parts[1])
 					height, errHeight := strconv.Atoi(parts[2])
 					if errWidth != nil || errHeight != nil {
-						log.Printf("Error converting dimensions to integers: width error %v, height error %v\n", errWidth, errHeight)
+						log.Printf("Error converting dimensions to integers: width error %v, height error %v", errWidth, errHeight)
 						continue
 					}
 					ws := &pty.Winsize{
@@ -161,45 +184,39 @@ func handleConnection(conn net.Conn) {
 						Rows: uint16(height),
 					}
 					if err := pty.Setsize(ptyMaster, ws); err != nil {
-						log.Printf("Error resizing pty: %v\n", err)
+						log.Printf("Error resizing PTY: %v", err)
 					} else {
-						log.Printf("Terminal resized to %dx%d\n", width, height)
+						log.Printf("Terminal resized to %dx%d", width, height)
 					}
+				} else {
+					log.Println("Invalid resize message format")
 				}
 			}
-
 		}
 	}()
 
 	// Execute the command
-	cmd := exec.Command(cmdParts[0], cmdParts[1:]...)
+	cmd := exec.Command(cmdStruct.Command[0], cmdStruct.Command[1:]...)
 	cmd.Stdin = ptySlave
 	cmd.Stdout = ptySlave
 	cmd.Stderr = ptySlave
 
-	// Set the process group so that the termination signal is
-	// forwarded to the shell process
-	cmd.SysProcAttr = &syscall.SysProcAttr{}
-	cmd.SysProcAttr.Setctty = true
-	cmd.SysProcAttr.Setsid = true
-	cmd.SysProcAttr.Pdeathsig = syscall.SIGTERM
+	// Set the process attributes
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setctty:   true,
+		Setsid:    true,
+		Pdeathsig: syscall.SIGTERM,
+	}
 
 	// Start the shell process
 	if err = cmd.Start(); err != nil {
 		log.Println("Error starting shell:", err)
-		conn.Close()
 		return
 	}
 	log.Println("Shell started")
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
-
-	// Setting up a goroutine to wait for the shell process to exit
-	go func() {
-		cmd.Wait()
-		ptySlave.Close()
-	}()
 
 	// Handle the termination signal
 	go func() {
@@ -211,20 +228,44 @@ func handleConnection(conn net.Conn) {
 	// Wait for the shell process to exit
 	cmd.Wait()
 	log.Println("Shell process exited")
-	ptySlave.Close()
 	log.Printf("Connection closed\n\n")
 }
 
-func startClient(command string) {
+func startClient(command []string) {
 	// Connect to the server
 	conn, err := net.Dial("tcp", "127.0.0.1:8080")
 	if err != nil {
-		panic(err)
+		log.Println("Error connecting to the host:", err)
+		return
 	}
 	defer conn.Close()
 
-	// Set up handling for SIGWINCH (window change) signal to detect terminal
-	// resize events
+	// Get the initial terminal size
+	initialWidth, initialHeight, err := term.GetSize(int(os.Stdin.Fd()))
+	if err != nil {
+		log.Println("Error getting initial terminal size:", err)
+		return
+	}
+
+	// Send the command to the server
+	cmd := Command{
+		Command: command,
+		Width:   uint16(initialWidth),
+		Height:  uint16(initialHeight),
+	}
+	cmdBytes, err := json.Marshal(cmd)
+	if err != nil {
+		log.Println("Error encoding command:", err)
+		return
+	}
+
+	_, err = conn.Write(append(cmdBytes, '\n'))
+	if err != nil {
+		log.Println("Error sending command to the server:", err)
+		return
+	}
+
+	// Set up handling for SIGWINCH (window change) signal to detect terminal resize events
 	sendTerminalSize := func() {
 		width, height, err := term.GetSize(int(os.Stdin.Fd()))
 		if err != nil {
@@ -235,30 +276,23 @@ func startClient(command string) {
 		resizeCommand := fmt.Sprintf("resize:%d:%d\n", width, height)
 		_, err = conn.Write([]byte(resizeCommand))
 		if err != nil {
-			log.Println("Error sending terminal size:", err)
+			log.Println("Error sending terminal size to the server:", err)
 		}
 	}
+
 	sigwinchChan := make(chan os.Signal, 1)
 	signal.Notify(sigwinchChan, syscall.SIGWINCH)
-
 	go func() {
 		for range sigwinchChan {
 			sendTerminalSize()
 		}
-
 	}()
-
-	// Send the command to the server
-	_, err = conn.Write([]byte(command + "\n"))
-	if err != nil {
-		log.Println("Error sending command to the server:", err)
-		return
-	}
 
 	// Set the terminal to raw mode
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
-		panic(err)
+		log.Println("Error setting terminal to raw mode:", err)
+		return
 	}
 	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
@@ -278,9 +312,6 @@ func startClient(command string) {
 		}
 		close(doneCh)
 	}()
-
-	// Set initial terminal size
-	sendTerminalSize()
 
 	<-doneCh
 }
