@@ -146,7 +146,7 @@ func handleConnection(conn net.Conn) {
 			}
 
 			if strings.HasPrefix(message, "resize:") {
-				log.Println("resize message received")
+				log.Println("Resize request received")
 				trimmedMessage := strings.TrimSpace(message)
 				parts := strings.Split(trimmedMessage, ":")
 				if len(parts) == 3 {
@@ -223,23 +223,29 @@ func startClient(command string) {
 	}
 	defer conn.Close()
 
-	// Set the terminal size
+	// Set up handling for SIGWINCH (window change) signal to detect terminal
+	// resize events
+	sendTerminalSize := func() {
+		width, height, err := term.GetSize(int(os.Stdin.Fd()))
+		if err != nil {
+			log.Println("Error getting terminal size:", err)
+			return
+		}
+
+		resizeCommand := fmt.Sprintf("resize:%d:%d\n", width, height)
+		_, err = conn.Write([]byte(resizeCommand))
+		if err != nil {
+			log.Println("Error sending terminal size:", err)
+		}
+	}
 	sigwinchChan := make(chan os.Signal, 1)
 	signal.Notify(sigwinchChan, syscall.SIGWINCH)
 
 	go func() {
 		for range sigwinchChan {
-			width, height, err := term.GetSize(int(os.Stdin.Fd()))
-			if err != nil {
-				log.Println("Error getting terminal size:", err)
-				continue
-			}
-
-			_, err = conn.Write([]byte(fmt.Sprintf("resize:%d:%d\n", width, height)))
-			if err != nil {
-				log.Println("Error sending terminal size:", err)
-			}
+			sendTerminalSize()
 		}
+
 	}()
 
 	// Send the command to the server
@@ -272,6 +278,9 @@ func startClient(command string) {
 		}
 		close(doneCh)
 	}()
+
+	// Set initial terminal size
+	sendTerminalSize()
 
 	<-doneCh
 }
