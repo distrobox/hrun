@@ -44,6 +44,7 @@ Options:
   -h, --help         Display this help message.
   --start            Start the server.
   --allowed-cmd      Specify allowed command (can be used multiple times).
+  --socket           Specify an alternative socket path (default: /tmp/hrun.sock).
 
 If command is "start", it starts the server with specified allowed commands.
 Otherwise, it starts the client and sends the command to the server.

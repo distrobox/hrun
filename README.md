@@ -15,14 +15,18 @@ Highly inspired by [host-spawn](https://github.com/1player/host-spawn).
 
 First you have to start the socket server on your host machine:
 
-```bash
-hrun start
-```
+```text
+Usage: hrun [options] [command] [args...]
 
-Then you can run commands from inside your container:
+Options:
+  -h, --help         Display this help message.
+  --start            Start the server.
+  --allowed-cmd      Specify allowed command (can be used multiple times).
+  --socket           Specify an alternative socket path (default: /tmp/hrun.sock).
 
-```bash
-hrun echo "Hello from your host machine"
+If command is "start", it starts the server with specified allowed commands.
+Otherwise, it starts the client and sends the command to the server.
+If no command is provided, it starts a shell on the host.
 ```
 
 ## What's the point?
