@@ -156,7 +156,6 @@ func handleConnection(conn net.Conn) {
 						log.Printf("Error converting dimensions to integers: width error %v, height error %v\n", errWidth, errHeight)
 						continue
 					}
-					fmt.Println(width, height)
 					ws := &pty.Winsize{
 						Cols: uint16(width),
 						Rows: uint16(height),
