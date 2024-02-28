@@ -37,6 +37,6 @@ problem on those systems where Flatpak or DBus are not available.
 ## What is left to do?
 
 - [ ] Add an option to restrict the commands that can be run
-- [ ] Add support for creating shims for host binaries
+- [x] Add support for creating shims for host binaries
 - [ ] Switch from TCP to Unix sockets
 - [ ] Code optimization

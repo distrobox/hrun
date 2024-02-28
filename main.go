@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"strconv"
 	"strings"
 	"syscall"
@@ -41,9 +42,15 @@ shell on the host.`)
 		return
 	}
 
-	command := []string{"sh", "-c", os.Getenv("SHELL")}
-	if len(os.Args) > 1 {
-		command = os.Args[1:]
+	// Start the client otherwise
+	var command []string
+	if path.Base(os.Args[0]) == "hrun" {
+		command = []string{"sh", "-c", os.Getenv("SHELL")}
+		if len(os.Args) > 1 {
+			command = os.Args[1:]
+		}
+	} else {
+		command = append([]string{path.Base(os.Args[0])}, os.Args[1:]...)
 	}
 
 	startClient(command)
