@@ -162,9 +162,6 @@ func handleConnection(conn net.Conn) {
 		for {
 			message, err := reader.ReadString('\n')
 			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading from connection: %v", err)
-				}
 				break
 			}
 
