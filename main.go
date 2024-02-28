@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -26,37 +27,55 @@ type Command struct {
 }
 
 func main() {
-	// Start the server if the first argument is "start"
-	if len(os.Args) > 1 && os.Args[1] == "start" {
-		startServer()
+	helpFlag := flag.Bool("h", false, "Display help")
+	helpFlagLong := flag.Bool("help", false, "Display help")
+	startFlag := flag.Bool("start", false, "Start the server")
+	allowedCmds := make([]string, 0)
+	flag.Func("allowed-cmd", "Specify allowed command (can be used multiple times)", func(cmd string) error {
+		allowedCmds = append(allowedCmds, cmd)
+		return nil
+	})
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Usage: hrun [options] [command] [args...]
+
+Options:
+  -h, --help         Display this help message.
+  --start            Start the server.
+  --allowed-cmd      Specify allowed command (can be used multiple times).
+
+If command is "start", it starts the server with specified allowed commands.
+Otherwise, it starts the client and sends the command to the server.
+If no command is provided, it starts a shell on the host.
+`)
+	}
+
+	flag.Parse()
+
+	// Help message
+	if *helpFlag || *helpFlagLong {
+		flag.Usage()
 		return
 	}
 
-	// Print help message if the first argument is "-h" or "--help"
-	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
-		log.Println(`Usage: hrun [options] command [args...]
-
-If command is "start", it starts the server. Otherwise, it starts the client
-and sends the command to the server. If no command is provided, it starts a
-shell on the host.`)
+	// Server mode
+	if *startFlag {
+		startServer(allowedCmds)
 		return
 	}
 
-	// Start the client otherwise
+	// Client mode
 	var command []string
-	if path.Base(os.Args[0]) == "hrun" {
+	if path.Base(os.Args[0]) == "hrun" && len(flag.Args()) == 0 {
 		command = []string{"sh", "-c", os.Getenv("SHELL")}
-		if len(os.Args) > 1 {
-			command = os.Args[1:]
-		}
 	} else {
-		command = append([]string{path.Base(os.Args[0])}, os.Args[1:]...)
+		command = flag.Args()
 	}
 
 	startClient(command)
 }
 
-func startServer() {
+func startServer(allowedCmds []string) {
 	// Create a listener for the server
 	listener, err := net.Listen("tcp", "127.0.0.1:8080")
 	if err != nil {
@@ -87,7 +106,7 @@ func startServer() {
 				log.Println("Listener closed, shutting down server...")
 				return
 			}
-			go handleConnection(conn)
+			go handleConnection(conn, allowedCmds)
 		}
 	}
 }
@@ -106,7 +125,7 @@ func acceptConn(listener net.Listener) <-chan net.Conn {
 	return ch
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, allowedCmds []string) {
 	defer conn.Close()
 
 	// Read the command from the client
@@ -128,6 +147,22 @@ func handleConnection(conn net.Conn) {
 	if len(cmdStruct.Command) == 0 {
 		log.Println("No command provided")
 		return
+	}
+
+	// Check if the command is allowed
+	if len(allowedCmds) > 0 {
+		allowed := false
+		for _, allowedCmd := range allowedCmds {
+			if cmdStruct.Command[0] == allowedCmd {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			log.Printf("Command %s is not allowed", cmdStruct.Command[0])
+			conn.Close()
+			return
+		}
 	}
 
 	// Prepare a pty
