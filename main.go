@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -131,6 +133,45 @@ func handleConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
+	// Set the terminal size
+	go func() {
+		reader := bufio.NewReader(conn)
+		for {
+			message, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("Error reading from connection: %v\n", err)
+				}
+				break
+			}
+
+			if strings.HasPrefix(message, "resize:") {
+				log.Println("resize message received")
+				trimmedMessage := strings.TrimSpace(message)
+				parts := strings.Split(trimmedMessage, ":")
+				if len(parts) == 3 {
+					width, errWidth := strconv.Atoi(parts[1])
+					height, errHeight := strconv.Atoi(parts[2])
+					if errWidth != nil || errHeight != nil {
+						log.Printf("Error converting dimensions to integers: width error %v, height error %v\n", errWidth, errHeight)
+						continue
+					}
+					fmt.Println(width, height)
+					ws := &pty.Winsize{
+						Cols: uint16(width),
+						Rows: uint16(height),
+					}
+					if err := pty.Setsize(ptyMaster, ws); err != nil {
+						log.Printf("Error resizing pty: %v\n", err)
+					} else {
+						log.Printf("Terminal resized to %dx%d\n", width, height)
+					}
+				}
+			}
+
+		}
+	}()
+
 	// Execute the command
 	cmd := exec.Command(cmdParts[0], cmdParts[1:]...)
 	cmd.Stdin = ptySlave
@@ -182,6 +223,25 @@ func startClient(command string) {
 		panic(err)
 	}
 	defer conn.Close()
+
+	// Set the terminal size
+	sigwinchChan := make(chan os.Signal, 1)
+	signal.Notify(sigwinchChan, syscall.SIGWINCH)
+
+	go func() {
+		for range sigwinchChan {
+			width, height, err := term.GetSize(int(os.Stdin.Fd()))
+			if err != nil {
+				log.Println("Error getting terminal size:", err)
+				continue
+			}
+
+			_, err = conn.Write([]byte(fmt.Sprintf("resize:%d:%d\n", width, height)))
+			if err != nil {
+				log.Println("Error sending terminal size:", err)
+			}
+		}
+	}()
 
 	// Send the command to the server
 	_, err = conn.Write([]byte(command + "\n"))
