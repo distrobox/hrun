@@ -16,19 +16,28 @@ import (
 )
 
 func main() {
+	// Start the server if the first argument is "start"
 	if len(os.Args) > 1 && os.Args[1] == "start" {
 		startServer()
 		return
 	}
 
-	if len(os.Args) < 2 {
-		fmt.Println(`Usage:
-	hrun start
-	hrun "ls -la"`)
+	// Print help message if the first argument is "-h" or "--help"
+	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
+		fmt.Println(`Usage: hrun [options] command [args...]
+
+If command is "start", it starts the server. Otherwise, it starts the client
+and sends the command to the server. If no command is provided, it starts a
+shell on the host.`)
 		return
 	}
 
-	command := strings.Join(os.Args[1:], " ")
+	// Start the client otherwise
+	command := "sh -c $SHELL"
+	if len(os.Args) > 1 {
+		command = strings.Join(os.Args[1:], " ")
+	}
+
 	startClient(command)
 }
 
