@@ -164,7 +164,6 @@ func handleConnection(conn net.Conn) {
 	// Handle the termination signal
 	go func() {
 		<-sigCh
-		log.Println("Closing the connection and shell process...")
 		conn.Close()
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}()
