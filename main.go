@@ -30,6 +30,7 @@ func main() {
 	helpFlag := flag.Bool("h", false, "Display help")
 	helpFlagLong := flag.Bool("help", false, "Display help")
 	startFlag := flag.Bool("start", false, "Start the server")
+	socketFlag := flag.String("socket", "/tmp/hrun.sock", "Specify an alternative socket path")
 	allowedCmds := make([]string, 0)
 	flag.Func("allowed-cmd", "Specify allowed command (can be used multiple times)", func(cmd string) error {
 		allowedCmds = append(allowedCmds, cmd)
@@ -60,7 +61,7 @@ If no command is provided, it starts a shell on the host.
 
 	// Server mode
 	if *startFlag {
-		startServer(allowedCmds)
+		startServer(allowedCmds, socketFlag)
 		return
 	}
 
@@ -72,17 +73,17 @@ If no command is provided, it starts a shell on the host.
 		command = flag.Args()
 	}
 
-	startClient(command)
+	startClient(command, socketFlag)
 }
 
-func startServer(allowedCmds []string) {
+func startServer(allowedCmds []string, socketFlag *string) {
 	// Create a listener for the server
-	listener, err := net.Listen("tcp", "127.0.0.1:8080")
+	listener, err := net.Listen("unix", *socketFlag)
 	if err != nil {
 		panic(err)
 	}
 	defer listener.Close()
-	log.Printf("Server is running on 127.0.0.1:8080\n\n")
+	log.Printf("Server is running on %s\n", listener.Addr())
 
 	// Set up a signal handler to shut down the server
 	doneCh := make(chan struct{})
@@ -270,9 +271,9 @@ func handleConnection(conn net.Conn, allowedCmds []string) {
 	log.Printf("Connection closed\n\n")
 }
 
-func startClient(command []string) {
+func startClient(command []string, socketFlag *string) {
 	// Connect to the server
-	conn, err := net.Dial("tcp", "127.0.0.1:8080")
+	conn, err := net.Dial("unix", *socketFlag)
 	if err != nil {
 		log.Println("Error connecting to the host:", err)
 		return
