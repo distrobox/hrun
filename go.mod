@@ -1,6 +1,6 @@
 module github.com/distrobox/hrun
 
-go 1.21.6
+go 1.21
 
 require (
 	github.com/creack/pty v1.1.21
