@@ -1,4 +1,4 @@
-module github.com/mirkobrombin/hrun
+module github.com/distrobox/hrun
 
 go 1.21.6
 
