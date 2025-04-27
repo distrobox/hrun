@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -17,11 +18,11 @@ import (
 	"github.com/distrobox/hrun/pkg/structs"
 )
 
-func StartServer(allowedCmds []string, socketPath string) {
+func StartServer(allowedCmds []string, socketPath string) error {
 	// Create a listener for the server
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer listener.Close()
 	log.Printf("Server is running on %s\n", listener.Addr())
@@ -42,13 +43,13 @@ func StartServer(allowedCmds []string, socketPath string) {
 		select {
 		case <-doneCh:
 			log.Println("Shutting down server...")
-			return
+			return errors.New("server shutdown")
 		case conn, ok := <-acceptConn(listener):
 			if !ok {
 				log.Println("Listener closed, shutting down server...")
-				return
+				return errors.New("listener closed")
 			}
-			go handleConnection(conn, allowedCmds)
+			go HandleConnection(conn, allowedCmds)
 		}
 	}
 }
@@ -67,7 +68,7 @@ func acceptConn(listener net.Listener) <-chan net.Conn {
 	return ch
 }
 
-func handleConnection(conn net.Conn, allowedCmds []string) {
+func HandleConnection(conn net.Conn, allowedCmds []string) {
 	defer conn.Close()
 
 	// Read the command from the client

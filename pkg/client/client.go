@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,12 +16,12 @@ import (
 	"golang.org/x/term"
 )
 
-func StartClient(command []string, socketPath string) {
+func StartClient(command []string, socketPath string) error {
 	// Connect to the server
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		log.Println("Error connecting to the host:", err)
-		return
+		return errors.New("failed to connect to the server")
 	}
 	defer conn.Close()
 
@@ -28,7 +29,7 @@ func StartClient(command []string, socketPath string) {
 	initialWidth, initialHeight, err := term.GetSize(int(os.Stdin.Fd()))
 	if err != nil {
 		log.Println("Error getting initial terminal size:", err)
-		return
+		return errors.New("failed to get terminal size")
 	}
 
 	// Send the command to the server
@@ -40,13 +41,13 @@ func StartClient(command []string, socketPath string) {
 	cmdBytes, err := json.Marshal(cmd)
 	if err != nil {
 		log.Println("Error encoding command:", err)
-		return
+		return errors.New("failed to encode command")
 	}
 
 	_, err = conn.Write(append(cmdBytes, '\n'))
 	if err != nil {
 		log.Println("Error sending command to the server:", err)
-		return
+		return errors.New("failed to send command to the server")
 	}
 
 	// Set up handling for SIGWINCH (window change) signal to detect terminal resize events
@@ -76,7 +77,7 @@ func StartClient(command []string, socketPath string) {
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		log.Println("Error setting terminal to raw mode:", err)
-		return
+		return errors.New("failed to set terminal to raw mode")
 	}
 	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
@@ -98,4 +99,12 @@ func StartClient(command []string, socketPath string) {
 	}()
 
 	<-doneCh
+
+	// Clean up
+	signal.Stop(sigwinchChan)
+	close(sigwinchChan)
+	_ = term.Restore(int(os.Stdin.Fd()), oldState)
+	_ = conn.Close()
+	log.Println("Client connection closed")
+	return nil
 }
