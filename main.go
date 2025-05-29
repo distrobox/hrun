@@ -6,7 +6,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/distrobox/hrun/cmd"
+	"github.com/containerpak/hrun/cmd"
 )
 
 func main() {

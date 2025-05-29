@@ -1,4 +1,4 @@
-module github.com/distrobox/hrun
+module github.com/containerpak/hrun
 
 go 1.21
 

@@ -12,7 +12,7 @@ import (
 
 	"syscall"
 
-	"github.com/distrobox/hrun/pkg/structs"
+	"github.com/containerpak/hrun/pkg/structs"
 	"golang.org/x/term"
 )
 

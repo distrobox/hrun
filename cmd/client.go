@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/distrobox/hrun/pkg/client"
+	"github.com/containerpak/hrun/pkg/client"
 )
 
 func StartClient(command []string, socketPath string) {

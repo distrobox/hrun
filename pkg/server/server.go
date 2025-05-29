@@ -15,7 +15,7 @@ import (
 	"syscall"
 
 	"github.com/creack/pty"
-	"github.com/distrobox/hrun/pkg/structs"
+	"github.com/containerpak/hrun/pkg/structs"
 )
 
 func StartServer(allowedCmds []string, socketPath string) error {

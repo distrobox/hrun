@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/distrobox/hrun/pkg/server"
+	"github.com/containerpak/hrun/pkg/server"
 )
 
 func StartServer(allowedCmds []string, socketPath string) {
